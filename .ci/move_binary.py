@@ -10,12 +10,11 @@ binary_filename = os.path.abspath(sys.argv[1])
 master_repository_directory = os.path.abspath(sys.argv[2])
 data_repository = sys.argv[3]
 data_repository_directory = os.path.abspath(data_repository)
-demo_name = sys.argv[4]
-
-directory = f"demo_{demo_name}"
-filename = os.path.basename(binary_filename)
+directory = sys.argv[4]
 
 os.chdir(master_repository_directory)
+
+filename = os.path.basename(binary_filename)
 # Include commit subject and hash to the new commit
 commit_hash = (
     subprocess.check_output(["git", "rev-parse", "--verify", "--short", "HEAD"])
@@ -56,25 +55,35 @@ else:
 # Prepare for pushing
 os.chdir(data_repository_directory)
 os.makedirs(directory, exist_ok=True)
-# Ensure that there is no changes
-subprocess.check_call(["git", "pull", "origin", data_repository, "--ff-only"])
 
 # Try to push several times
 for i in range(3):
+    # Ensure that there are no changes
+    subprocess.check_call(
+        [
+            "git",
+            "fetch",
+            f"origin/{data_repository}",
+            "--depth=0",
+            "--force",
+        ]
+    )
+    subprocess.check_call(
+        ["git", "reset", f"origin/{data_repository}", "--hard"]
+    )
+
+    # Push changes
     shutil.copy(binary_filename, os.path.join(directory, filename))
     subprocess.check_call(["git", "add", os.path.join(directory, filename)])
-    subprocess.check_call(["git", "commit", "-m", new_commit_message])
+    subprocess.check_call(
+        ["git", "commit", "--amend", "-m", new_commit_message]
+    )
     try:
-        subprocess.check_call(["git", "push", "origin", data_repository])
-    except subprocess.CalledProcessError:  # There is changes in repository
-        # Undo local changes
         subprocess.check_call(
-            ["git", "reset", f"origin/{data_repository}", "--hard"]
+            ["git", "push", "origin", data_repository, "--force"]
         )
-        # Pull new changes
-        subprocess.check_call(
-            ["git", "pull", "origin", data_repository, "--force", "--ff-only"]
-        )
+    except subprocess.CalledProcessError:
+        pass  # There are changes in repository
     else:
         break  # Exit loop if there is no errors
 else:
@@ -86,6 +95,6 @@ new_commit_hash = (
     .strip()
 )
 print(
-    f"Binary file: {env['GITHUB_SERVER_URL']}/{env['GITHUB_REPOSITORY']}/blob/"
+    f"Binary file: {env['GITHUB_SERVER_URL']}/kivymd/storage/blob/"
     f"{new_commit_hash}/{directory}/{filename}"
 )

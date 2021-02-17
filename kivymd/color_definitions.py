@@ -6,6 +6,8 @@ Themes/Color Definitions
 
    `Material Design spec, The color system <https://material.io/design/color/the-color-system.html>`_
 
+   `Material Design spec, The color tool <https://material.io/resources/color/#!/?view.left=0&view.right=0>`_
+
 Material colors palette to use in :class:`kivymd.theming.ThemeManager`.
 :data:`~colors` is a dict-in-dict where the first key is a value from
 :data:`~palette` and the second key is a value from :data:`~hue`. Color is a hex
@@ -60,7 +62,8 @@ colors = {
         "900": "4A148C",
         "A100": "EA80FC",
         "A200": "E040FB",
-        "A400": "D500F9FF",
+        "A400": "D500F9",
+        "A700": "AA00FF",
     },
     "DeepPurple": {
         "50": "EDE7F6",
@@ -599,7 +602,7 @@ light_colors = {
     ],
     "DeepOrange": ["50", "100", "200", "300", "400", "A100", "A200"],
     "Brown": ["50", "100", "200"],
-    "Gray": ["51", "100", "200", "300", "400", "500"],
+    "Gray": ["50", "100", "200", "300", "400", "500"],
     "BlueGray": ["50", "100", "200", "300"],
     "Dark": [],
     "Light": ["White", "MainBackground", "DialogBackground"],

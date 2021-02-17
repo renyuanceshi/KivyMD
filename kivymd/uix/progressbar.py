@@ -4,7 +4,7 @@ Components/Progress Bar
 
 .. seealso::
 
-    `Material Design spec, Progress indicators https://material.io/components/progress-indicators`_
+    `Material Design spec, Progress indicators <https://material.io/components/progress-indicators>`_
 
 .. rubric:: Progress indicators express an unspecified wait time or display
     the length of a process.
@@ -91,7 +91,7 @@ Indeterminate
             type: "indeterminate"
 
         MDRaisedButton:
-            text: "START"
+            text: "STOP" if app.state == "start" else "START"
             pos_hint: {"center_x": .5, "center_y": .45}
             on_press: app.state = "stop" if app.state == "start" else "start"
     '''
@@ -137,7 +137,7 @@ from kivy.clock import Clock
 from kivy.lang import Builder
 from kivy.properties import (
     BooleanProperty,
-    ListProperty,
+    ColorProperty,
     NumericProperty,
     OptionProperty,
     StringProperty,
@@ -199,12 +199,12 @@ class MDProgressBar(ThemableBehavior, ProgressBar):
     and defaults to `'horizontal'`.
     """
 
-    color = ListProperty()
+    color = ColorProperty(None)
     """
     Progress bar color in ``rgba`` format.
 
-    :attr:`color` is an :class:`~kivy.properties.OptionProperty`
-    and defaults to `[]`.
+    :attr:`color` is an :class:`~kivy.properties.ColorProperty`
+    and defaults to `None`.
     """
 
     running_transition = StringProperty("in_cubic")

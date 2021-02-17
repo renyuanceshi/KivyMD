@@ -439,9 +439,18 @@ Create submenu
 Menu with MDToolbar
 -------------------
 
-.. Warning:: The :class:`~MDDropdownMenu` does not work with the standard
-    :class:`~kivymd.uix.toolbar.MDToolbar`. You can use your own
-    ``CustomToolbar`` and bind the menu window output to its elements.
+The :class:`~MDDropdownMenu` works well with the standard
+:class:`~kivymd.uix.toolbar.MDToolbar`. Since the buttons on the Toolbar are created
+by the MDToolbar component, it is necessary to pass the button as an argument to
+the callback using `lambda x: app.callback(x)`.
+
+.. note::
+
+    This example uses drop down menus for both the righthand and lefthand menus (i.e
+    both the 'triple bar' and 'triple dot' menus) to illustrate that it is possible.
+    A better solution for the 'triple bar' menu would probably have been
+    :class:`~kivymd.uix.MDNavigationDrawer`.
+
 
 .. code-block:: python
 
@@ -449,84 +458,44 @@ Menu with MDToolbar
 
     from kivymd.app import MDApp
     from kivymd.uix.menu import MDDropdownMenu
-    from kivymd.theming import ThemableBehavior
-    from kivymd.uix.behaviors import RectangularElevationBehavior
-    from kivymd.uix.boxlayout import MDBoxLayout
+    from kivymd.uix.snackbar import Snackbar
 
     KV = '''
-    <CustomToolbar>:
-        size_hint_y: None
-        height: self.theme_cls.standard_increment
-        padding: "5dp"
-        spacing: "12dp"
+    MDBoxLayout:
+        orientation: "vertical"
 
-        MDIconButton:
-            id: button_1
-            icon: "menu"
-            pos_hint: {"center_y": .5}
-            on_release: app.menu_1.open()
+        MDToolbar:
+            title: "MDToolbar"
+            left_action_items: [["menu", lambda x: app.callback(x)]]
+            right_action_items: [["dots-vertical", lambda x: app.callback(x)]]
 
         MDLabel:
-            text: "MDDropdownMenu"
-            pos_hint: {"center_y": .5}
-            size_hint_x: None
-            width: self.texture_size[0]
-            text_size: None, None
-            font_style: 'H6'
-
-        Widget:
-
-        MDIconButton:
-            id: button_2
-            icon: "dots-vertical"
-            pos_hint: {"center_y": .5}
-            on_release: app.menu_2.open()
-
-
-    Screen:
-
-        CustomToolbar:
-            id: toolbar
-            elevation: 10
-            pos_hint: {"top": 1}
+            text: "Content"
+            halign: "center"
     '''
 
 
-    class CustomToolbar(
-        ThemableBehavior, RectangularElevationBehavior, MDBoxLayout,
-    ):
-        def __init__(self, **kwargs):
-            super().__init__(**kwargs)
-            self.md_bg_color = self.theme_cls.primary_color
-
-
     class Test(MDApp):
-        def __init__(self, **kwargs):
-            super().__init__(**kwargs)
-            self.screen = Builder.load_string(KV)
-            self.menu_1 = self.create_menu(
-                "Button menu", self.screen.ids.toolbar.ids.button_1,
-            )
-            self.menu_2 = self.create_menu(
-                "Button dots", self.screen.ids.toolbar.ids.button_2,
-            )
-
-        def create_menu(self, text, instance):
-            menu_items = [{"icon": "git", "text": text} for i in range(5)]
-            menu = MDDropdownMenu(caller=instance, items=menu_items, width_mult=5)
-            menu.bind(on_release=self.menu_callback)
-            return menu
-
-        def menu_callback(self, instance_menu, instance_menu_item):
-            instance_menu.dismiss()
-
         def build(self):
-            return self.screen
+            menu_items = [{"text": f"Item {i}"} for i in range(5)]
+            self.menu = MDDropdownMenu(
+                items=menu_items,
+                width_mult=4,
+            )
+            self.menu.bind(on_release=self.menu_callback)
+            return Builder.load_string(KV)
 
+        def callback(self, button):
+            self.menu.caller = button
+            self.menu.open()
+
+        def menu_callback(self, menu, item):
+            self.menu.dismiss()
+            Snackbar(text=item.text).open()
 
     Test().run()
 
-.. image:: https://github.com/HeaTTheatR/KivyMD-data/raw/master/gallery/kivymddoc/menu-with-toolbar.gif
+.. image:: https://github.com/HeaTTheatR/KivyMD-data/raw/master/gallery/kivymddoc/toolbar-menu.gif
     :align: center
 
 Position menu
@@ -644,6 +613,7 @@ from kivy.core.window import Window
 from kivy.lang import Builder
 from kivy.metrics import dp
 from kivy.properties import (
+    ColorProperty,
     ListProperty,
     NumericProperty,
     ObjectProperty,
@@ -709,7 +679,7 @@ Builder.load_string(
             RoundedRectangle:
                 size: self.size
                 pos: self.pos
-                radius: [root.radius,]
+                radius: root.radius
 
         MDMenu:
             id: md_menu
@@ -798,11 +768,11 @@ class MDDropdownMenu(ThemableBehavior, FloatLayout):
             The method that will be called when you click menu items.
     """
 
-    selected_color = ListProperty()
+    selected_color = ColorProperty(None)
     """Custom color (``rgba`` format) for list item when hover behavior occurs.
 
-    :attr:`selected_color` is a :class:`~kivy.properties.ListProperty`
-    and defaults to `[]`.
+    :attr:`selected_color` is a :class:`~kivy.properties.ColorProperty`
+    and defaults to `None`.
     """
 
     items = ListProperty()
@@ -859,12 +829,12 @@ class MDDropdownMenu(ThemableBehavior, FloatLayout):
     and defaults to `None`.
     """
 
-    background_color = ListProperty()
+    background_color = ColorProperty(None)
     """
     Color of the background of the menu.
 
-    :attr:`background_color` is a :class:`~kivy.properties.ListProperty`
-    and defaults to `[]`.
+    :attr:`background_color` is a :class:`~kivy.properties.ColorProperty`
+    and defaults to `None`.
     """
 
     opening_transition = StringProperty("out_cubic")
@@ -877,7 +847,8 @@ class MDDropdownMenu(ThemableBehavior, FloatLayout):
 
     opening_time = NumericProperty(0.2)
     """
-    Menu window opening animation time.
+    Menu window opening animation time and you can set it to 0
+    if you don't want animation of menu opening.
 
     :attr:`opening_time` is a :class:`~kivy.properties.NumericProperty`
     and defaults to `0.2`.
@@ -900,12 +871,16 @@ class MDDropdownMenu(ThemableBehavior, FloatLayout):
     and defaults to `'auto'`.
     """
 
-    radius = NumericProperty(7)
+    radius = ListProperty(
+        [
+            dp(7),
+        ]
+    )
     """
     Menu radius.
 
-    :attr:`radius` is a :class:`~kivy.properties.NumericProperty`
-    and defaults to `'7'`.
+    :attr:`radius` is a :class:`~kivy.properties.ListProperty`
+    and defaults to `'[dp(7),]'`.
     """
 
     _start_coords = []

@@ -113,7 +113,7 @@ Example
     :align: center
 
 Two events are available for :class:`~MDExpansionPanel`
-------------------------------------------------------
+-------------------------------------------------------
 
 - :attr:`~MDExpansionPanel.on_open`
 - :attr:`~MDExpansionPanel.on_close`
@@ -164,8 +164,9 @@ from kivymd.uix.list import (
 Builder.load_string(
     """
 <MDExpansionChevronRight>:
-    icon: 'chevron-right'
+    icon: "chevron-right"
     disabled: True
+    md_bg_color_disabled: 0, 0, 0, 0
 
     canvas.before:
         PushMatrix
@@ -179,7 +180,7 @@ Builder.load_string(
 
 <MDExpansionPanel>
     size_hint_y: None
-    #height: dp(68)
+    # height: dp(68)
 """
 )
 
@@ -212,14 +213,16 @@ class MDExpansionPanel(RelativeLayout):
     """
 
     content = ObjectProperty()
-    """Content of panel. Must be `Kivy` widget.
+    """
+    Content of panel. Must be `Kivy` widget.
 
     :attr:`content` is an :class:`~kivy.properties.ObjectProperty`
     and defaults to `None`.
     """
 
     icon = StringProperty()
-    """Icon of panel.
+    """
+    Icon of panel.
 
     Icon Should be either be a path to an image or
     a logo name in :class:`~kivymd.icon_definitions.md_icons`
@@ -246,7 +249,8 @@ class MDExpansionPanel(RelativeLayout):
     """
 
     closing_transition = StringProperty("out_sine")
-    """The name of the animation transition type to use when animating to
+    """
+    The name of the animation transition type to use when animating to
     the :attr:`state` 'close'.
 
     :attr:`closing_transition` is a :class:`~kivy.properties.StringProperty`
@@ -270,6 +274,9 @@ class MDExpansionPanel(RelativeLayout):
     :attr:`panel_cls` is a :class:`~kivy.properties.ObjectProperty`
     and defaults to `None`.
     """
+
+    _state = "close"
+    _anim_playing = False
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -295,7 +302,8 @@ class MDExpansionPanel(RelativeLayout):
                 if self.icon in md_icons.keys():
                     self.panel_cls.add_widget(
                         IconLeftWidget(
-                            icon=self.icon, pos_hint={"center_y": 0.5}
+                            icon=self.icon,
+                            pos_hint={"center_y": 0.5},
                         )
                     )
                 else:
@@ -337,7 +345,7 @@ class MDExpansionPanel(RelativeLayout):
                     panel.remove_widget(panel.children[0])
                     chevron = panel.children[0].children[0].children[0]
                     self.set_chevron_up(chevron)
-                    self.close_panel(panel)
+                    self.close_panel(panel, press_current_panel)
                     self.dispatch("on_close")
                     break
         if not press_current_panel:
@@ -355,17 +363,33 @@ class MDExpansionPanel(RelativeLayout):
 
         Animation(_angle=0, d=self.closing_time).start(instance_chevron)
 
-    def close_panel(self, instance_panel):
+    def close_panel(self, instance_panel, press_current_panel):
         """Method closes the panel."""
 
-        Animation(
+        if self._anim_playing:
+            return
+
+        if press_current_panel:
+            self._anim_playing = True
+
+        self._state = "close"
+
+        anim = Animation(
             height=self.panel_cls.height,
             d=self.closing_time,
             t=self.closing_transition,
-        ).start(instance_panel)
+        )
+        anim.bind(on_complete=self._disable_anim)
+        anim.start(instance_panel)
 
     def open_panel(self, *args):
         """Method opens a panel."""
+
+        if self._anim_playing:
+            return
+
+        self._anim_playing = True
+        self._state = "open"
 
         anim = Animation(
             height=self.content.height + self.height,
@@ -373,7 +397,12 @@ class MDExpansionPanel(RelativeLayout):
             t=self.opening_transition,
         )
         anim.bind(on_complete=self._add_content)
+        anim.bind(on_complete=self._disable_anim)
         anim.start(self)
+
+    def get_state(self):
+        """Returns the state of panel. Can be `close` or `open` ."""
+        return self._state
 
     def add_widget(self, widget, index=0, canvas=None):
         if isinstance(
@@ -386,6 +415,9 @@ class MDExpansionPanel(RelativeLayout):
         ):
             self.height = widget.height
         return super().add_widget(widget)
+
+    def _disable_anim(self, *args):
+        self._anim_playing = False
 
     def _add_content(self, *args):
         if self.content:

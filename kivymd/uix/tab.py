@@ -466,20 +466,20 @@ Switching the tab by name
 __all__ = ("MDTabs", "MDTabsBase")
 
 from kivy.clock import Clock
-from kivy.graphics import Rectangle
+from kivy.graphics import RoundedRectangle
 from kivy.lang import Builder
 from kivy.properties import (
     AliasProperty,
     BooleanProperty,
     BoundedNumericProperty,
-    ListProperty,
+    ColorProperty,
     NumericProperty,
     ObjectProperty,
+    OptionProperty,
     StringProperty,
 )
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.behaviors import ToggleButtonBehavior
-from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 from kivy.utils import boundary
@@ -489,10 +489,12 @@ from kivymd.icon_definitions import md_icons
 from kivymd.theming import ThemableBehavior
 from kivymd.uix.behaviors import (
     RectangularElevationBehavior,
+    RectangularRippleBehavior,
     SpecificBackgroundColorBehavior,
 )
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.carousel import MDCarousel
+from kivymd.uix.label import MDLabel
 
 Builder.load_string(
     """
@@ -500,13 +502,22 @@ Builder.load_string(
 
 
 <MDTabsLabel>
+    _set_start_tab: False
     size_hint: None, 1
-    halign: 'center'
-    padding: '12dp', 0
-    group: 'tabs'
+    halign: "center"
+    padding: "12dp", 0
+    group: "tabs"
     font: root.font_name
     allow_no_selection: False
     markup: True
+    on_width:
+        if not self._set_start_tab: \
+        self.tab_bar.parent._update_indicator( \
+        self.tab_bar.parent.carousel.current_slide.tab_label); \
+        self._set_start_tab = True
+    on_tab_bar:
+        self.text_size = (None, None) \
+        if self.tab_bar.parent.allow_stretch else (self.width, None)
     on_ref_press:
         self.tab_bar.parent.dispatch(\
         "on_ref_press",
@@ -514,27 +525,16 @@ Builder.load_string(
         self.tab, \
         self.tab_bar, \
         self.tab_bar.parent.carousel)
-    text_color_normal:
-        (\
-        (0, 0, 0, .5) \
-        if app.theme_cls.theme_style == 'Dark' and not self.text_color_normal \
-        else (1, 1, 1, .6) \
-        if app.theme_cls.theme_style == 'Light' and not self.text_color_normal \
-        else self.text_color_normal \
-        )
-    text_color_active:
-        (\
-        (0, 0, 0, .75) \
-        if app.theme_cls.theme_style == 'Dark' and not self.text_color_active \
-        else (1, 1, 1, 1) \
-        if app.theme_cls.theme_style == 'Light' and not self.text_color_normal \
-        else self.text_color_active
-        )
     color:
-        self.text_color_active if self.state == 'down' \
-        else self.text_color_normal
-    on_x: self._trigger_update_tab_indicator()
-    on_width: self._trigger_update_tab_indicator()
+        ( \
+        self.text_color_active \
+        if self.text_color_active else self.specific_secondary_text_color\
+        ) \
+        if self.state == "down" else \
+        ( \
+        self.text_color_normal \
+        if self.text_color_normal else self.theme_cls.text_color \
+        )
 
 
 <MDTabsScrollView>
@@ -549,10 +549,13 @@ Builder.load_string(
 <MDTabs>
     carousel: carousel
     tab_bar: tab_bar
-    anchor_y: 'top'
+    anchor_y: "top"
     background_palette: "Primary"
-    text_color_normal: self.specific_secondary_text_color
-    text_color_active: self.specific_text_color
+
+    _line_x: 0
+    _line_width: 0
+    _line_height: 0
+    _line_radius: 0
 
     MDTabsMain:
         padding: 0, tab_bar.height, 0, 0
@@ -564,8 +567,9 @@ Builder.load_string(
             anim_move_duration: root.anim_duration
             on_index: root.on_carousel_index(*args)
             on__offset: tab_bar.android_animation(*args)
-            on_slides: self.index = root.default_tab
-            on_slides: root.on_carousel_index(self, 0)
+            on_slides:
+                self.index = root.default_tab
+                root.on_carousel_index(self, 0)
 
     MDTabsBar:
         id: tab_bar
@@ -575,25 +579,41 @@ Builder.load_string(
         size_hint: 1, None
         elevation: root.elevation
         height: root.tab_bar_height
-        md_bg_color: self.theme_cls.primary_color if not root.background_color else root.background_color
+        md_bg_color:
+            self.theme_cls.primary_color \
+            if not root.background_color else root.background_color
 
         MDTabsScrollView:
             id: scrollview
             on_width: tab_bar._trigger_update_tab_bar()
 
-            MDGridLayout:
+            GridLayout:
                 id: layout
                 rows: 1
                 size_hint_y: 1
-                adaptive_width: True
+                size_hint_x: None
+                width: self.minimum_width
                 on_width: tab_bar._trigger_update_tab_bar()
 
-                canvas.after:
+                canvas.before:
                     Color:
-                        rgba: root.theme_cls.accent_color if not root.color_indicator else root.color_indicator
-                    Rectangle:
+                        rgba:
+                            root.theme_cls.accent_color \
+                            if not root.indicator_color else root.indicator_color
+                    RoundedRectangle:
                         pos: self.pos
                         size: 0, root.tab_indicator_height
+                        radius: [0,]
+                    Line:
+                        width: dp(2)
+                        rounded_rectangle:
+                            [\
+                            root._line_x, \
+                            self.pos[1], \
+                            root._line_width, \
+                            root._line_height, \
+                            root._line_radius \
+                            ]
 """
 )
 
@@ -602,11 +622,11 @@ class MDTabsException(Exception):
     pass
 
 
-class MDTabsLabel(ToggleButtonBehavior, Label):
+class MDTabsLabel(ToggleButtonBehavior, RectangularRippleBehavior, MDLabel):
     """This class it represent the label of each tab."""
 
-    text_color_normal = ListProperty((1, 1, 1, 1))
-    text_color_active = ListProperty((1, 1, 1, 1))
+    text_color_normal = ColorProperty(None)
+    text_color_active = ColorProperty(None)
     tab = ObjectProperty()
     tab_bar = ObjectProperty()
     font_name = StringProperty("Roboto")
@@ -623,15 +643,9 @@ class MDTabsLabel(ToggleButtonBehavior, Label):
 
     def on_texture(self, widget, texture):
         # just save the minimum width of the label based of the content
-        if texture:
+        if texture and int(self.width) != int(texture.width):
             self.width = texture.width
             self.min_space = self.width
-
-    def _trigger_update_tab_indicator(self):
-        # update the position and size of the indicator
-        # when the label changes size or position
-        if self.state == "down":
-            self.tab_bar.update_indicator(self.x, self.width)
 
 
 class MDTabsBase(Widget):
@@ -761,12 +775,12 @@ class MDTabsScrollView(ScrollView):
 class MDTabsBar(ThemableBehavior, RectangularElevationBehavior, MDBoxLayout):
     """
     This class is just a boxlayout that contains the scroll view for tabs.
-    He is also responsible for resizing the tab shortcut when necessary.
+    It is also responsible for resizing the tab shortcut when necessary.
     """
 
     target = ObjectProperty(None, allownone=True)
     """
-    Is the carousel reference of the next tab / slide.
+    It is the carousel reference of the next tab / slide.
     When you go from `'Tab A'` to `'Tab B'`, `'Tab B'` will be the
     target tab / slide of the carousel.
 
@@ -775,13 +789,13 @@ class MDTabsBar(ThemableBehavior, RectangularElevationBehavior, MDBoxLayout):
     """
 
     def get_rect_instruction(self):
-        for i in self.layout.canvas.after.children:
-            if isinstance(i, Rectangle):
-                return i
+        for canvas_instruction in self.layout.canvas.before.children:
+            if isinstance(canvas_instruction, RoundedRectangle):
+                return canvas_instruction
 
     indicator = AliasProperty(get_rect_instruction, cache=True)
     """
-    Is the Rectangle instruction reference of the tab indicator.
+    It is the RoundedRectangle instruction reference of the tab indicator.
 
     :attr:`indicator` is an :class:`~kivy.properties.AliasProperty`.
     """
@@ -828,10 +842,22 @@ class MDTabsBar(ThemableBehavior, RectangularElevationBehavior, MDBoxLayout):
                     else width / len(tabs)
                 )
 
-    def update_indicator(self, x, w):
+    def update_indicator(self, x, w, radius=None):
         # update position and size of the indicator
-        self.indicator.pos = (x, 0)
-        self.indicator.size = (w, self.indicator.size[1])
+        if self.parent.tab_indicator_type == "line-round":
+            self.parent._line_x = x
+            self.parent._line_width = w
+            self.parent._line_height = self.parent.tab_indicator_height
+            self.parent._line_radius = self.parent.tab_indicator_height / 2
+        elif self.parent.tab_indicator_type == "line-rect":
+            self.parent._line_x = x
+            self.parent._line_width = w
+            self.parent._line_height = self.parent.tab_indicator_height
+        else:
+            self.indicator.pos = (x, 0)
+            self.indicator.size = (w, self.parent.tab_indicator_height)
+            if radius:
+                self.indicator.radius = radius
 
     def tab_bar_autoscroll(self, target, step):
         # automatic scroll animation of the tab bar.
@@ -849,12 +875,12 @@ class MDTabsBar(ThemableBehavior, RectangularElevationBehavior, MDBoxLayout):
 
         if not dst:
             return
-
         if scroll_is_late and target.center_x > bound_left:
             x = lsx + dst
-
         elif not scroll_is_late and target.center_x < bound_right:
             x = lsx - dst
+        else:
+            return
 
         x = boundary(x, 0.0, 1.0)
         self.scrollview.goto(x, None)
@@ -926,7 +952,7 @@ class MDTabsBar(ThemableBehavior, RectangularElevationBehavior, MDBoxLayout):
 
 class MDTabs(ThemableBehavior, SpecificBackgroundColorBehavior, AnchorLayout):
     """
-    You can use this class to create your own tabbed panel..
+    You can use this class to create your own tabbed panel.
 
     :Events:
         `on_tab_switch`
@@ -970,6 +996,17 @@ class MDTabs(ThemableBehavior, SpecificBackgroundColorBehavior, AnchorLayout):
     and defaults to `'2dp'`.
     """
 
+    tab_indicator_type = OptionProperty(
+        "line", options=["line", "fill", "round", "line-round", "line-rect"]
+    )
+    """
+    Type of tab indicator. Available options are: `'line'`, `'fill'`,
+    `'round'`, `'line-rect'` and `'line-round'`.
+
+    :attr:`tab_indicator_type` is an :class:`~kivy.properties.OptionProperty`
+    and defaults to `'line'`.
+    """
+
     anim_duration = NumericProperty(0.2)
     """
     Duration of the slide animation.
@@ -996,28 +1033,28 @@ class MDTabs(ThemableBehavior, SpecificBackgroundColorBehavior, AnchorLayout):
     and defaults to `True`.
     """
 
-    background_color = ListProperty()
+    background_color = ColorProperty(None)
     """
     Background color of tabs in ``rgba`` format.
 
-    :attr:`background_color` is an :class:`~kivy.properties.ListProperty`
-    and defaults to `[]`.
+    :attr:`background_color` is an :class:`~kivy.properties.ColorProperty`
+    and defaults to `None`.
     """
 
-    text_color_normal = ListProperty((1, 1, 1, 1))
+    text_color_normal = ColorProperty(None)
     """
     Text color of the label when it is not selected.
 
-    :attr:`text_color_normal` is an :class:`~kivy.properties.ListProperty`
-    and defaults to `(1, 1, 1, 1)`.
+    :attr:`text_color_normal` is an :class:`~kivy.properties.ColorProperty`
+    and defaults to `None`.
     """
 
-    text_color_active = ListProperty((1, 1, 1, 1))
+    text_color_active = ColorProperty(None)
     """
     Text color of the label when it is selected.
 
-    :attr:`text_color_active` is an :class:`~kivy.properties.ListProperty`
-    and defaults to `(1, 1, 1, 1)`.
+    :attr:`text_color_active` is an :class:`~kivy.properties.ColorProperty`
+    and defaults to `None`.
     """
 
     elevation = NumericProperty(0)
@@ -1032,12 +1069,12 @@ class MDTabs(ThemableBehavior, SpecificBackgroundColorBehavior, AnchorLayout):
     and defaults to `0`.
     """
 
-    color_indicator = ListProperty()
+    indicator_color = ColorProperty(None)
     """
     Color indicator in ``rgba`` format.
 
-    :attr:`color_indicator` is an :class:`~kivy.properties.ListProperty`
-    and defaults to `[]`.
+    :attr:`indicator_color` is an :class:`~kivy.properties.ColorProperty`
+    and defaults to `None`.
     """
 
     lock_swiping = BooleanProperty(False)
@@ -1056,12 +1093,37 @@ class MDTabs(ThemableBehavior, SpecificBackgroundColorBehavior, AnchorLayout):
     and defaults to `'Roboto'`.
     """
 
+    ripple_duration = NumericProperty(2)
+    """
+    Ripple duration when long touching to tab.
+
+    :attr:`ripple_duration` is an :class:`~kivy.properties.NumericProperty`
+    and defaults to `2`.
+    """
+
+    no_ripple_effect = BooleanProperty(True)
+    """
+    Whether to use the ripple effect when tapping on a tab.
+
+    :attr:`no_ripple_effect` is an :class:`~kivy.properties.BooleanProperty`
+    and defaults to `True`.
+    """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.register_event_type("on_tab_switch")
         self.register_event_type("on_ref_press")
         self.register_event_type("on_slide_progress")
         Clock.schedule_once(self._carousel_bind, 1)
+        self.theme_cls.bind(primary_palette=self.update_icon_color)
+        self.theme_cls.bind(theme_style=self.update_icon_color)
+
+    def update_icon_color(self, instance, value):
+        for tab_label in self.get_tab_list():
+            if not self.text_color_normal:
+                tab_label.text_color_normal = self.theme_cls.text_color
+            if not self.text_color_active:
+                tab_label.text_color_active = self.specific_secondary_text_color
 
     def switch_tab(self, name_tab):
         """Switching the tab by name."""
@@ -1069,6 +1131,10 @@ class MDTabs(ThemableBehavior, SpecificBackgroundColorBehavior, AnchorLayout):
         for instance_tab in self.tab_bar.parent.carousel.slides:
             if instance_tab.text == name_tab:
                 self.tab_bar.parent.carousel.load_slide(instance_tab)
+                break
+        for tab_label in self.get_tab_list():
+            if name_tab == tab_label.text:
+                self.ids.scrollview.scroll_to(tab_label)
                 break
 
     def get_tab_list(self):
@@ -1078,29 +1144,42 @@ class MDTabs(ThemableBehavior, SpecificBackgroundColorBehavior, AnchorLayout):
 
     def add_widget(self, widget, index=0, canvas=None):
         # You can add only subclass of MDTabsBase.
-        if len(self.children) >= 2:
+        if issubclass(widget.__class__, MDTabsBase):
             try:
+                # FIXME: Can't set the value of the `no_ripple_effect`
+                #  and `ripple_duration` properties for widget.tab_label.
+                widget.tab_label._no_ripple_effect = self.no_ripple_effect
+                widget.tab_label.ripple_duration_in_slow = self.ripple_duration
                 widget.tab_label.group = str(self)
                 widget.tab_label.tab_bar = self.tab_bar
-                widget.tab_label.text_color_normal = self.text_color_normal
-                widget.tab_label.text_color_active = self.text_color_active
-                self.bind(
-                    text_color_normal=widget.tab_label.setter(
-                        "text_color_normal"
-                    )
+                widget.tab_label.text_color_normal = (
+                    self.text_color_normal
+                    if self.text_color_normal
+                    else self.theme_cls.text_color
                 )
+                widget.tab_label.text_color_active = (
+                    self.text_color_active
+                    if self.text_color_active
+                    else self.specific_secondary_text_color
+                )
+                self.bind(font_name=widget.tab_label.setter("font_name"))
                 self.bind(
                     text_color_active=widget.tab_label.setter(
                         "text_color_active"
                     )
                 )
-                self.bind(font_name=widget.tab_label.setter("font_name"))
+                self.bind(
+                    text_color_normal=widget.tab_label.setter(
+                        "text_color_normal"
+                    )
+                )
                 self.tab_bar.layout.add_widget(widget.tab_label)
                 self.carousel.add_widget(widget)
                 return
             except AttributeError:
                 pass
-        return super().add_widget(widget)
+        if isinstance(widget, (MDTabsMain, MDTabsBar)):
+            return super().add_widget(widget)
 
     def remove_widget(self, widget):
         # You can remove only subclass of MDTabsLabel.
@@ -1111,10 +1190,23 @@ class MDTabs(ThemableBehavior, SpecificBackgroundColorBehavior, AnchorLayout):
         # The last tab is not deleted.
         if len(self.tab_bar.layout.children) == 1:
             return
+
+        # Search object next tab.
+        next_tab = None
+        for i, tab in enumerate(self.tab_bar.layout.children):
+            if tab == widget:
+                next_tab = self.tab_bar.layout.children[i - 1]
+                break
+
         self.tab_bar.layout.remove_widget(widget)
-        for tab in self.carousel.slides:
-            if tab.text == widget.text:
-                self.carousel.remove_widget(tab)
+        # After deleting the tab, it updates the indicator width
+        # on the next tab.
+        if next_tab:
+            self._update_indicator(next_tab)
+
+        for slide in self.carousel.slides:
+            if slide.text == widget.text:
+                self.carousel.remove_widget(slide)
                 break
 
     def on_slide_progress(self, *args):
@@ -1123,16 +1215,56 @@ class MDTabs(ThemableBehavior, SpecificBackgroundColorBehavior, AnchorLayout):
     def on_carousel_index(self, carousel, index):
         """Called when the carousel index changes."""
 
-        # when the index of the carousel change, update
-        # tab indicator, select the current tab and reset threshold data.
+        # When the index of the carousel change, update tab indicator,
+        # select the current tab and reset threshold data.
         if carousel.current_slide:
             current_tab_label = carousel.current_slide.tab_label
             if current_tab_label.state == "normal":
-                current_tab_label._do_press()
+                # current_tab_label._do_press()
                 current_tab_label.dispatch("on_release")
-            self.tab_bar.update_indicator(
-                current_tab_label.x, current_tab_label.width
-            )
+
+            if self.tab_indicator_type == "round":
+                self.tab_indicator_height = self.tab_bar_height
+                if index == 0:
+                    radius = [
+                        0,
+                        self.tab_bar_height / 2,
+                        self.tab_bar_height / 2,
+                        0,
+                    ]
+                    self.tab_bar.update_indicator(
+                        current_tab_label.x, current_tab_label.width, radius
+                    )
+                elif index == len(self.get_tab_list()) - 1:
+                    radius = [
+                        self.tab_bar_height / 2,
+                        0,
+                        0,
+                        self.tab_bar_height / 2,
+                    ]
+                    self.tab_bar.update_indicator(
+                        current_tab_label.x, current_tab_label.width, radius
+                    )
+                else:
+                    radius = [
+                        self.tab_bar_height / 2,
+                    ]
+                    self.tab_bar.update_indicator(
+                        current_tab_label.x, current_tab_label.width, radius
+                    )
+            elif (
+                self.tab_indicator_type == "fill"
+                or self.tab_indicator_type == "line-round"
+                or self.tab_indicator_type == "line-rect"
+            ):
+                self.tab_indicator_height = self.tab_bar_height
+                self.tab_bar.update_indicator(
+                    current_tab_label.x, current_tab_label.width
+                )
+            else:
+                self.tab_bar.update_indicator(
+                    current_tab_label.x, current_tab_label.width
+                )
 
     def on_ref_press(self, *args):
         """The method will be called when the ``on_ref_press`` event
@@ -1141,8 +1273,22 @@ class MDTabs(ThemableBehavior, SpecificBackgroundColorBehavior, AnchorLayout):
     def on_tab_switch(self, *args):
         """Called when switching tabs."""
 
-    def _carousel_bind(self, i):
+    def on_size(self, *args):
+        if self.carousel.current_slide:
+            self._update_indicator(self.carousel.current_slide.tab_label)
+
+    def _carousel_bind(self, interval):
         self.carousel.bind(on_slide_progress=self._on_slide_progress)
 
     def _on_slide_progress(self, *args):
         self.dispatch("on_slide_progress", args)
+
+    def _update_indicator(self, current_tab_label):
+        def update_indicator(interval):
+            self.tab_bar.update_indicator(
+                current_tab_label.x, current_tab_label.width
+            )
+
+        if not current_tab_label:
+            current_tab_label = self.tab_bar.layout.children[-1]
+        Clock.schedule_once(update_indicator)

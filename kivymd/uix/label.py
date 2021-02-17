@@ -212,7 +212,7 @@ from kivy.metrics import sp
 from kivy.properties import (
     AliasProperty,
     BooleanProperty,
-    ListProperty,
+    ColorProperty,
     OptionProperty,
     StringProperty,
 )
@@ -220,6 +220,7 @@ from kivy.uix.label import Label
 
 from kivymd.theming import ThemableBehavior
 from kivymd.theming_dynamic_text import get_contrast_text_color
+from kivymd.uix import MDAdaptiveWidget
 
 Builder.load_string(
     """
@@ -246,7 +247,7 @@ Builder.load_string(
 )
 
 
-class MDLabel(ThemableBehavior, Label):
+class MDLabel(ThemableBehavior, Label, MDAdaptiveWidget):
     font_style = StringProperty("Body1")
     """
     Label font style.
@@ -296,22 +297,20 @@ class MDLabel(ThemableBehavior, Label):
     and defaults to `None`.
     """
 
-    text_color = ListProperty(None, allownone=True)
+    text_color = ColorProperty(None)
     """Label text color in ``rgba`` format.
 
-    :attr:`text_color` is an :class:`~kivy.properties.ListProperty`
+    :attr:`text_color` is an :class:`~kivy.properties.ColorProperty`
     and defaults to `None`.
     """
 
-    parent_background = ListProperty(None, allownone=True)
+    parent_background = ColorProperty(None)
+    can_capitalize = BooleanProperty(True)
 
     _currently_bound_property = {}
 
-    can_capitalize = BooleanProperty(True)
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
         self.bind(
             font_style=self.update_font_style,
             can_capitalize=self.update_font_style,
@@ -319,7 +318,6 @@ class MDLabel(ThemableBehavior, Label):
         self.on_theme_text_color(None, self.theme_text_color)
         self.update_font_style()
         self.on_opposite_colors(None, self.opposite_colors)
-
         Clock.schedule_once(self.check_font_styles)
 
     def check_font_styles(self, *dt):
